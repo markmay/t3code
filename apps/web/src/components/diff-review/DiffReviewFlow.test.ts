@@ -155,7 +155,7 @@ describe("DiffReview end-to-end flow", () => {
     // Verify the formatted message includes both
     const message = formatReviewMessage(getState().comments);
     expect(message).toContain("src/a.ts L5: Fix naming");
-    expect(message).toContain("src/b.ts L20: Why was this removed?");
+    expect(message).toContain("src/b.ts L20 (deleted): Why was this removed?");
   });
 
   it("escape key cancels the draft without propagating (does not close diff panel)", () => {

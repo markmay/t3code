@@ -222,6 +222,42 @@ describe("useFileDiffAnnotations — buildAnnotationsForFile", () => {
     expect(resultB[0]!.side).toBe("additions");
   });
 
+  it("creates separate annotations for different ranges with the same start line", () => {
+    getState().openDraft({ filePath: "src/app.ts", side: "additions", lineNumber: 10 });
+    getState().submitComment("single line");
+    getState().openDraft({ filePath: "src/app.ts", side: "additions", lineNumber: 10, endLineNumber: 15 });
+    getState().submitComment("range comment");
+
+    const result = buildAnnotationsForFile(
+      "src/app.ts",
+      getState().comments,
+      getState().activeDraft,
+      getState().editingCommentId,
+    );
+
+    expect(result).toHaveLength(2);
+    const singleLine = result.find((a) => a.endLineNumber == null);
+    const rangeAnnotation = result.find((a) => a.endLineNumber === 15);
+    expect(singleLine!.metadata.comments[0]!.text).toBe("single line");
+    expect(rangeAnnotation!.metadata.comments[0]!.text).toBe("range comment");
+  });
+
+  it("includes endLineNumber in annotations", () => {
+    getState().openDraft({ filePath: "src/app.ts", side: "additions", lineNumber: 5, endLineNumber: 8 });
+    getState().submitComment("range");
+
+    const result = buildAnnotationsForFile(
+      "src/app.ts",
+      getState().comments,
+      getState().activeDraft,
+      getState().editingCommentId,
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0]!.lineNumber).toBe(5);
+    expect(result[0]!.endLineNumber).toBe(8);
+  });
+
   it("sets editingCommentId in annotation metadata when editing", () => {
     getState().openDraft({ filePath: "src/app.ts", side: "additions", lineNumber: 10 });
     getState().submitComment("editable");

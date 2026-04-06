@@ -15,7 +15,9 @@ interface DiffReviewSendButtonProps {
 }
 
 export function DiffReviewSendButton({ threadId, cwd }: DiffReviewSendButtonProps) {
-  const commentCount = useReviewCommentsStore((s) => s.comments.length);
+  const commentCount = useReviewCommentsStore(
+    (s) => s.comments.filter((c) => !c.threadId || c.threadId === threadId).length,
+  );
   const [isSending, setIsSending] = useState(false);
 
   const activeThread = useStore((store) =>
@@ -30,9 +32,10 @@ export function DiffReviewSendButton({ threadId, cwd }: DiffReviewSendButtonProp
     if (!api || !threadId) return;
 
     const { comments, clearAllComments } = useReviewCommentsStore.getState();
-    if (comments.length === 0) return;
+    const threadComments = comments.filter((c) => !c.threadId || c.threadId === threadId);
+    if (threadComments.length === 0) return;
 
-    const messageText = formatReviewMessage(comments, cwd);
+    const messageText = formatReviewMessage(threadComments, cwd);
     if (!messageText) return;
 
     setIsSending(true);

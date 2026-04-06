@@ -627,6 +627,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                       key={themedFileKey}
                       fileDiff={fileDiff}
                       filePath={filePath}
+                      threadId={activeThreadId}
                       diffStyle={diffRenderMode === "split" ? "split" : "unified"}
                       overflow={diffWordWrap ? "wrap" : "scroll"}
                       resolvedTheme={resolvedTheme as DiffThemeType}
@@ -663,6 +664,7 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
 function ReviewableFileDiff({
   fileDiff,
   filePath,
+  threadId,
   diffStyle,
   overflow,
   resolvedTheme,
@@ -670,6 +672,7 @@ function ReviewableFileDiff({
 }: {
   fileDiff: FileDiffMetadata;
   filePath: string;
+  threadId: string | null;
   diffStyle: "unified" | "split";
   overflow?: "scroll" | "wrap";
   resolvedTheme: "light" | "dark";
@@ -681,7 +684,7 @@ function ReviewableFileDiff({
     renderHeaderMetadata,
     hasFileReviewContent,
     onGutterUtilityClick,
-  } = useFileDiffAnnotations(filePath);
+  } = useFileDiffAnnotations(filePath, threadId);
 
   const effectiveUnsafeCSS = hasFileReviewContent
     ? DIFF_PANEL_UNSAFE_CSS_WITH_REVIEW

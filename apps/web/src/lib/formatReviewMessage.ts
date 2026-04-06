@@ -19,7 +19,8 @@ export function formatReviewMessage(comments: ReviewComment[], cwd?: string): st
     const lineRef = comment.endLineNumber != null
       ? `L${comment.lineNumber}-L${comment.endLineNumber}`
       : `L${comment.lineNumber}`;
-    return `${resolvedPath} ${lineRef}: ${comment.text}`;
+    const sideLabel = comment.side === "deletions" ? " (deleted)" : "";
+    return `${resolvedPath} ${lineRef}${sideLabel}: ${comment.text}`;
   });
 
   return `${MESSAGE_HEADER}\n\n${lines.join("\n\n")}`;

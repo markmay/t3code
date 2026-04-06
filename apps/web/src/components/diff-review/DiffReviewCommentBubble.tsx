@@ -18,10 +18,22 @@ export function DiffReviewCommentBubble({ comment }: DiffReviewCommentBubbleProp
     removeComment(comment.id);
   }, [comment.id, removeComment]);
 
+  const rangeLabel =
+    comment.endLineNumber != null
+      ? `L${comment.lineNumber}\u2013L${comment.endLineNumber}`
+      : null;
+
   return (
     <div className="my-1 rounded-md border border-border bg-card px-3 py-2 shadow-sm">
       <div className="flex items-start justify-between gap-2">
-        <p className="flex-1 text-sm text-foreground whitespace-pre-wrap">{comment.text}</p>
+        <div className="flex-1">
+          {rangeLabel && (
+            <span className="mb-0.5 block text-[10px] font-medium text-muted-foreground">
+              {rangeLabel}
+            </span>
+          )}
+          <p className="text-sm text-foreground whitespace-pre-wrap">{comment.text}</p>
+        </div>
         <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"

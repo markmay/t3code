@@ -22,6 +22,7 @@ export interface ReviewAnnotationMetadata {
 interface DiffLineAnnotation {
   side: AnnotationSide;
   lineNumber: number;
+  endLineNumber?: number | undefined;
   metadata: ReviewAnnotationMetadata;
 }
 
@@ -39,22 +40,26 @@ export function buildAnnotationsForFile(
 
   const groupMap = new Map<
     string,
-    { side: AnnotationSide; lineNumber: number; comments: ReviewComment[] }
+    { side: AnnotationSide; lineNumber: number; endLineNumber?: number | undefined; comments: ReviewComment[] }
   >();
 
   for (const comment of fileComments) {
-    const key = `${comment.side}:${comment.lineNumber}`;
-    let group = groupMap.get(key);
-    if (!group) {
-      group = { side: comment.side, lineNumber: comment.lineNumber, comments: [] };
-      groupMap.set(key, group);
+    const key = comment.endLineNumber != null
+      ? `${comment.side}:${comment.lineNumber}:${comment.endLineNumber}`
+      : `${comment.side}:${comment.lineNumber}`;
+    const existing = groupMap.get(key);
+    if (existing) {
+      existing.comments.push(comment);
+    } else {
+      groupMap.set(key, { side: comment.side, lineNumber: comment.lineNumber, endLineNumber: comment.endLineNumber, comments: [comment] });
     }
-    group.comments.push(comment);
   }
 
   const draftTargetsThisFile = activeDraft?.filePath === filePath;
   const draftKey = draftTargetsThisFile
-    ? `${activeDraft.side}:${activeDraft.lineNumber}`
+    ? (activeDraft.endLineNumber != null
+        ? `${activeDraft.side}:${activeDraft.lineNumber}:${activeDraft.endLineNumber}`
+        : `${activeDraft.side}:${activeDraft.lineNumber}`)
     : null;
 
   // Ensure the draft line gets an annotation slot even without prior comments
@@ -62,6 +67,7 @@ export function buildAnnotationsForFile(
     groupMap.set(draftKey, {
       side: activeDraft.side,
       lineNumber: activeDraft.lineNumber,
+      endLineNumber: activeDraft.endLineNumber,
       comments: [],
     });
   }
@@ -72,6 +78,7 @@ export function buildAnnotationsForFile(
     annotations.push({
       side: group.side,
       lineNumber: group.lineNumber,
+      endLineNumber: group.endLineNumber,
       metadata: {
         comments: group.comments,
         hasDraft,
@@ -128,10 +135,14 @@ function renderCommentElements(
  * Hook that builds `lineAnnotations`, `renderAnnotation`, `onGutterUtilityClick`,
  * and `renderHeaderMetadata` for a single FileDiff component.
  */
-export function useFileDiffAnnotations(filePath: string) {
+export function useFileDiffAnnotations(filePath: string, threadId?: string | null) {
   // File-scoped selectors: only re-render when this file's data changes
   const fileComments = useReviewCommentsStore(
-    useShallow((s) => s.comments.filter((c) => c.filePath === filePath)),
+    useShallow((s) =>
+      s.comments.filter(
+        (c) => c.filePath === filePath && (!c.threadId || !threadId || c.threadId === threadId),
+      ),
+    ),
   );
   const activeDraft = useReviewCommentsStore(
     (s) => (s.activeDraft?.filePath === filePath ? s.activeDraft : null),
@@ -202,13 +213,14 @@ export function useFileDiffAnnotations(filePath: string) {
   const onGutterUtilityClick = useCallback(
     (range: SelectedLineRange) => {
       openDraft({
+        threadId: threadId ?? undefined,
         filePath,
         side: range.side ?? "additions",
         lineNumber: range.start,
         endLineNumber: range.end !== range.start ? range.end : undefined,
       });
     },
-    [filePath, openDraft],
+    [filePath, threadId, openDraft],
   );
 
   return {

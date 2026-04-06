@@ -80,4 +80,37 @@ describe("formatReviewMessage", () => {
 
     expect(result).toContain("Run `git diff` to see the full context of any changes");
   });
+
+  it("includes (deleted) label for deletion-side comments", () => {
+    const result = formatReviewMessage([
+      makeComment({ side: "deletions", lineNumber: 5, text: "why was this removed?" }),
+    ]);
+
+    expect(result).toContain("src/app.ts L5 (deleted): why was this removed?");
+  });
+
+  it("omits side label for addition-side comments", () => {
+    const result = formatReviewMessage([
+      makeComment({ side: "additions", lineNumber: 5, text: "looks good" }),
+    ]);
+
+    expect(result).toContain("src/app.ts L5: looks good");
+    expect(result).not.toContain("(deleted)");
+  });
+
+  it("includes (deleted) label with range references", () => {
+    const result = formatReviewMessage([
+      makeComment({ side: "deletions", lineNumber: 5, endLineNumber: 10, text: "this block" }),
+    ]);
+
+    expect(result).toContain("src/app.ts L5-L10 (deleted): this block");
+  });
+
+  it("formats range comments with line range reference", () => {
+    const result = formatReviewMessage([
+      makeComment({ lineNumber: 10, endLineNumber: 15, text: "refactor this" }),
+    ]);
+
+    expect(result).toContain("src/app.ts L10-L15: refactor this");
+  });
 });

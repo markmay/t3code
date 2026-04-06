@@ -8,6 +8,7 @@ export const FILE_COMMENT_LINE_NUMBER = 0;
 
 export interface ReviewComment {
   id: string;
+  threadId?: string | undefined;
   filePath: string;
   side: AnnotationSide;
   lineNumber: number;
@@ -17,6 +18,7 @@ export interface ReviewComment {
 }
 
 export interface DraftCommentTarget {
+  threadId?: string | undefined;
   filePath: string;
   side: AnnotationSide;
   lineNumber: number;
@@ -45,21 +47,23 @@ export const useReviewCommentsStore = create<ReviewCommentsState>((set, get) => 
 
   openDraft: (target) => {
     const { activeDraft } = get();
-    if (
-      activeDraft &&
-      activeDraft.filePath === target.filePath &&
-      activeDraft.side === target.side &&
-      activeDraft.lineNumber === target.lineNumber
-    ) {
-      set({ activeDraft: null, editingCommentId: null });
-      return;
-    }
     const endLineNumber =
       target.endLineNumber != null && target.endLineNumber !== target.lineNumber
         ? target.endLineNumber
         : undefined;
+    if (
+      activeDraft &&
+      activeDraft.filePath === target.filePath &&
+      activeDraft.side === target.side &&
+      activeDraft.lineNumber === target.lineNumber &&
+      activeDraft.endLineNumber === endLineNumber
+    ) {
+      set({ activeDraft: null, editingCommentId: null });
+      return;
+    }
     set({
       activeDraft: {
+        threadId: target.threadId,
         filePath: target.filePath,
         side: target.side,
         lineNumber: target.lineNumber,
@@ -80,6 +84,7 @@ export const useReviewCommentsStore = create<ReviewCommentsState>((set, get) => 
 
     const comment: ReviewComment = {
       id: randomUUID(),
+      threadId: activeDraft.threadId,
       filePath: activeDraft.filePath,
       side: activeDraft.side,
       lineNumber: activeDraft.lineNumber,
@@ -108,6 +113,7 @@ export const useReviewCommentsStore = create<ReviewCommentsState>((set, get) => 
     set({
       editingCommentId: commentId,
       activeDraft: {
+        threadId: comment.threadId,
         filePath: comment.filePath,
         side: comment.side,
         lineNumber: comment.lineNumber,
