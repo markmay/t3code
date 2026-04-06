@@ -129,6 +129,8 @@ const DIFF_PANEL_FILE_REVIEW_CSS = `
 }
 `;
 
+const DIFF_PANEL_UNSAFE_CSS_WITH_REVIEW = DIFF_PANEL_UNSAFE_CSS + DIFF_PANEL_FILE_REVIEW_CSS;
+
 type RenderablePatch =
   | {
       kind: "files";
@@ -682,7 +684,7 @@ function ReviewableFileDiff({
   } = useFileDiffAnnotations(filePath);
 
   const effectiveUnsafeCSS = hasFileReviewContent
-    ? DIFF_PANEL_UNSAFE_CSS + DIFF_PANEL_FILE_REVIEW_CSS
+    ? DIFF_PANEL_UNSAFE_CSS_WITH_REVIEW
     : DIFF_PANEL_UNSAFE_CSS;
 
   return (

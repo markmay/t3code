@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useCallback, useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
 import {
   useReviewCommentsStore,
   FILE_COMMENT_LINE_NUMBER,
@@ -34,10 +35,8 @@ export function buildAnnotationsForFile(
   activeDraft: DraftCommentTarget | null,
   editingCommentId: string | null,
 ): DiffLineAnnotation[] {
-  // Collect all comments for this file
   const fileComments = comments.filter((c) => c.filePath === filePath);
 
-  // Group by (side, lineNumber)
   const groupMap = new Map<
     string,
     { side: AnnotationSide; lineNumber: number; comments: ReviewComment[] }
@@ -53,13 +52,12 @@ export function buildAnnotationsForFile(
     group.comments.push(comment);
   }
 
-  // Check if the draft targets this file
   const draftTargetsThisFile = activeDraft?.filePath === filePath;
   const draftKey = draftTargetsThisFile
     ? `${activeDraft.side}:${activeDraft.lineNumber}`
     : null;
 
-  // If draft targets a line with no existing comments, create a new group
+  // Ensure the draft line gets an annotation slot even without prior comments
   if (draftTargetsThisFile && draftKey && !groupMap.has(draftKey)) {
     groupMap.set(draftKey, {
       side: activeDraft.side,
@@ -68,7 +66,6 @@ export function buildAnnotationsForFile(
     });
   }
 
-  // Build annotations array
   const annotations: DiffLineAnnotation[] = [];
   for (const [key, group] of groupMap) {
     const hasDraft = key === draftKey;
@@ -86,9 +83,6 @@ export function buildAnnotationsForFile(
   return annotations;
 }
 
-/**
- * SelectedLineRange as provided by @pierre/diffs onGutterUtilityClick callback.
- */
 interface SelectedLineRange {
   start: number;
   side?: "deletions" | "additions" | undefined;
@@ -96,22 +90,62 @@ interface SelectedLineRange {
   endSide?: "deletions" | "additions" | undefined;
 }
 
+const CONTENTS_STYLE = { display: "contents" } as const;
+const FILE_REVIEW_BLOCK_STYLE = {
+  flexBasis: "100%",
+  borderTop: "1px solid var(--border)",
+  padding: "0.5rem 0",
+} as const;
+
+/** Renders comment bubbles + optional draft input for a given annotation metadata. */
+function renderCommentElements(
+  metadata: ReviewAnnotationMetadata,
+  keyPrefix: string,
+): ReactNode[] {
+  const elements: ReactNode[] = [];
+
+  for (const comment of metadata.comments) {
+    if (comment.id === metadata.editingCommentId) continue;
+    elements.push(createElement(DiffReviewCommentBubble, { key: comment.id, comment }));
+  }
+
+  if (metadata.hasDraft) {
+    elements.push(
+      createElement(DiffReviewCommentInput, {
+        key: `${keyPrefix}-draft`,
+        prefillText: metadata.editingCommentId
+          ? metadata.comments.find((c) => c.id === metadata.editingCommentId)?.text
+          : undefined,
+        editingCommentId: metadata.editingCommentId,
+      }),
+    );
+  }
+
+  return elements;
+}
+
 /**
  * Hook that builds `lineAnnotations`, `renderAnnotation`, `onGutterUtilityClick`,
  * and `renderHeaderMetadata` for a single FileDiff component.
  */
 export function useFileDiffAnnotations(filePath: string) {
-  const comments = useReviewCommentsStore((s) => s.comments);
-  const activeDraft = useReviewCommentsStore((s) => s.activeDraft);
-  const editingCommentId = useReviewCommentsStore((s) => s.editingCommentId);
+  // File-scoped selectors: only re-render when this file's data changes
+  const fileComments = useReviewCommentsStore(
+    useShallow((s) => s.comments.filter((c) => c.filePath === filePath)),
+  );
+  const activeDraft = useReviewCommentsStore(
+    (s) => (s.activeDraft?.filePath === filePath ? s.activeDraft : null),
+  );
+  const editingCommentId = useReviewCommentsStore((s) =>
+    s.activeDraft?.filePath === filePath ? s.editingCommentId : null,
+  );
   const openDraft = useReviewCommentsStore((s) => s.openDraft);
 
   const allAnnotations = useMemo(
-    () => buildAnnotationsForFile(filePath, comments, activeDraft, editingCommentId),
-    [filePath, comments, activeDraft, editingCommentId],
+    () => buildAnnotationsForFile(filePath, fileComments, activeDraft, editingCommentId),
+    [filePath, fileComments, activeDraft, editingCommentId],
   );
 
-  // Split: line-level annotations go to @pierre/diffs, file-level rendered in header
   const lineAnnotations = useMemo(
     () => allAnnotations.filter((a) => a.lineNumber !== FILE_COMMENT_LINE_NUMBER),
     [allAnnotations],
@@ -128,32 +162,8 @@ export function useFileDiffAnnotations(filePath: string) {
       lineNumber: number;
       metadata: ReviewAnnotationMetadata;
     }): ReactNode => {
-      const { metadata } = annotation;
-      const elements: ReactNode[] = [];
-
-      // Render existing comment bubbles (skip the one being edited)
-      for (const comment of metadata.comments) {
-        if (comment.id === metadata.editingCommentId) continue;
-        elements.push(
-          createElement(DiffReviewCommentBubble, { key: comment.id, comment }),
-        );
-      }
-
-      // Render draft input if this line has an active draft
-      if (metadata.hasDraft) {
-        elements.push(
-          createElement(DiffReviewCommentInput, {
-            key: "draft-input",
-            prefillText: metadata.editingCommentId
-              ? metadata.comments.find((c) => c.id === metadata.editingCommentId)?.text
-              : undefined,
-            editingCommentId: metadata.editingCommentId,
-          }),
-        );
-      }
-
+      const elements = renderCommentElements(annotation.metadata, "line");
       if (elements.length === 0) return null;
-
       return createElement("div", { className: "flex flex-col gap-1 px-2" }, ...elements);
     },
     [],
@@ -162,13 +172,10 @@ export function useFileDiffAnnotations(filePath: string) {
   const hasFileReviewContent = fileAnnotation !== null;
 
   /**
-   * Renders the ⊕ button inline in the header, plus (when active) the file-level
-   * comment input/bubbles as a full-width block below the filename row.
-   *
-   * Uses `display: contents` on wrapper elements so the inner children participate
-   * directly in the [data-diffs-header] flex layout. Combined with dynamic unsafeCSS
-   * that sets flex-wrap on the header, the [data-file-review-content] div wraps to
-   * a new full-width row below the filename.
+   * Renders the file-comment button in the header, plus file-level comments/draft
+   * as a full-width block below the filename row. Uses display:contents wrappers
+   * so the inner children participate directly in the [data-diffs-header] flex
+   * layout, allowing the review block (flex-basis:100%) to wrap to a new row.
    */
   const renderHeaderMetadata = useCallback((): ReactNode => {
     const elements: ReactNode[] = [];
@@ -176,53 +183,22 @@ export function useFileDiffAnnotations(filePath: string) {
     elements.push(createElement(DiffReviewFileCommentButton, { key: "file-comment-btn", filePath }));
 
     if (fileAnnotation) {
-      const commentElements: ReactNode[] = [];
-
-      for (const comment of fileAnnotation.metadata.comments) {
-        if (comment.id === fileAnnotation.metadata.editingCommentId) continue;
-        commentElements.push(
-          createElement(DiffReviewCommentBubble, { key: comment.id, comment }),
-        );
-      }
-
-      if (fileAnnotation.metadata.hasDraft) {
-        commentElements.push(
-          createElement(DiffReviewCommentInput, {
-            key: "file-draft-input",
-            prefillText: fileAnnotation.metadata.editingCommentId
-              ? fileAnnotation.metadata.comments.find(
-                  (c) => c.id === fileAnnotation.metadata.editingCommentId,
-                )?.text
-              : undefined,
-            editingCommentId: fileAnnotation.metadata.editingCommentId,
-          }),
-        );
-      }
+      const commentElements = renderCommentElements(fileAnnotation.metadata, "file");
 
       if (commentElements.length > 0) {
         elements.push(
           createElement(
             "div",
-            {
-              key: "file-review-content",
-              style: { flexBasis: "100%", borderTop: "1px solid var(--border)", padding: "0.5rem 0" },
-              className: "flex flex-col gap-1",
-            },
+            { key: "file-review-content", style: FILE_REVIEW_BLOCK_STYLE, className: "flex flex-col gap-1" },
             ...commentElements,
           ),
         );
       }
     }
 
-    // display:contents makes this wrapper invisible for layout — its children
-    // become direct flex items of the slotted div, which in turn uses
-    // display:contents to become flex items of [data-diffs-header].
-    return createElement("span", { style: { display: "contents" } }, ...elements);
+    return createElement("span", { style: CONTENTS_STYLE }, ...elements);
   }, [filePath, fileAnnotation]);
 
-  /**
-   * Handler for @pierre/diffs' built-in gutter utility button click.
-   */
   const onGutterUtilityClick = useCallback(
     (range: SelectedLineRange) => {
       openDraft({

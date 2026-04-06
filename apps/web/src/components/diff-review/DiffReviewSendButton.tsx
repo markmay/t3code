@@ -15,8 +15,7 @@ interface DiffReviewSendButtonProps {
 }
 
 export function DiffReviewSendButton({ threadId, cwd }: DiffReviewSendButtonProps) {
-  const comments = useReviewCommentsStore((s) => s.comments);
-  const clearAllComments = useReviewCommentsStore((s) => s.clearAllComments);
+  const commentCount = useReviewCommentsStore((s) => s.comments.length);
   const [isSending, setIsSending] = useState(false);
 
   const activeThread = useStore((store) =>
@@ -28,7 +27,10 @@ export function DiffReviewSendButton({ threadId, cwd }: DiffReviewSendButtonProp
 
   const handleSend = useCallback(async () => {
     const api = readNativeApi();
-    if (!api || !threadId || comments.length === 0) return;
+    if (!api || !threadId) return;
+
+    const { comments, clearAllComments } = useReviewCommentsStore.getState();
+    if (comments.length === 0) return;
 
     const messageText = formatReviewMessage(comments, cwd);
     if (!messageText) return;
@@ -50,7 +52,6 @@ export function DiffReviewSendButton({ threadId, cwd }: DiffReviewSendButtonProp
         createdAt: new Date().toISOString(),
       });
       clearAllComments();
-      // Return focus to the composer/agent chat area
       window.requestAnimationFrame(() => {
         const composerEditor = document.querySelector<HTMLElement>('[contenteditable="true"]');
         composerEditor?.focus();
@@ -60,9 +61,9 @@ export function DiffReviewSendButton({ threadId, cwd }: DiffReviewSendButtonProp
     } finally {
       setIsSending(false);
     }
-  }, [threadId, comments, cwd, runtimeMode, interactionMode, clearAllComments]);
+  }, [threadId, cwd, runtimeMode, interactionMode]);
 
-  if (comments.length === 0) return null;
+  if (commentCount === 0) return null;
 
   return (
     <Button

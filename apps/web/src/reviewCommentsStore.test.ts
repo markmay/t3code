@@ -208,13 +208,13 @@ describe("reviewCommentsStore", () => {
     });
   });
 
-  describe("cancelEditing", () => {
+  describe("closeDraft during editing", () => {
     it("clears both activeDraft and editingCommentId", () => {
       getState().openDraft({ filePath: "a.ts", side: "additions", lineNumber: 1 });
       getState().submitComment("text");
       getState().startEditing(getState().comments[0]!.id);
 
-      getState().cancelEditing();
+      getState().closeDraft();
 
       expect(getState().activeDraft).toBeNull();
       expect(getState().editingCommentId).toBeNull();

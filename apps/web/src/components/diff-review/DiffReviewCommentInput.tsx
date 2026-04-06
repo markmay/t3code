@@ -3,9 +3,7 @@ import { useReviewCommentsStore } from "~/reviewCommentsStore";
 import { cn } from "~/lib/utils";
 
 interface DiffReviewCommentInputProps {
-  /** Pre-filled text when editing an existing comment. */
   prefillText?: string | undefined;
-  /** Comment ID being edited. When set, submit calls updateComment instead of submitComment. */
   editingCommentId?: string | null | undefined;
 }
 
@@ -18,13 +16,11 @@ export function DiffReviewCommentInput({
   const submitComment = useReviewCommentsStore((s) => s.submitComment);
   const updateComment = useReviewCommentsStore((s) => s.updateComment);
   const closeDraft = useReviewCommentsStore((s) => s.closeDraft);
-  const cancelEditing = useReviewCommentsStore((s) => s.cancelEditing);
 
   const isEditing = Boolean(editingCommentId);
   const canSubmit = text.trim().length > 0;
 
   useEffect(() => {
-    // Auto-focus textarea on mount
     textareaRef.current?.focus();
   }, []);
 
@@ -37,20 +33,12 @@ export function DiffReviewCommentInput({
     }
   }, [canSubmit, isEditing, editingCommentId, text, submitComment, updateComment]);
 
-  const handleCancel = useCallback(() => {
-    if (isEditing) {
-      cancelEditing();
-    } else {
-      closeDraft();
-    }
-  }, [isEditing, cancelEditing, closeDraft]);
-
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
-        handleCancel();
+        closeDraft();
         return;
       }
       if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -59,7 +47,7 @@ export function DiffReviewCommentInput({
         handleSubmit();
       }
     },
-    [handleCancel, handleSubmit],
+    [closeDraft, handleSubmit],
   );
 
   return (
@@ -79,7 +67,7 @@ export function DiffReviewCommentInput({
       <div className="mt-2 flex items-center justify-end gap-2">
         <button
           type="button"
-          onClick={handleCancel}
+          onClick={closeDraft}
           className="rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
         >
           Cancel

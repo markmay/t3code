@@ -179,8 +179,8 @@ describe("DiffReview end-to-end flow", () => {
     getState().startEditing(commentId);
     expect(getState().editingCommentId).toBe(commentId);
 
-    // Simulate Escape during edit — should cancel editing but keep the comment
-    getState().cancelEditing();
+    // Simulate Escape during edit — closeDraft cancels editing but keeps the comment
+    getState().closeDraft();
 
     expect(getState().editingCommentId).toBeNull();
     expect(getState().activeDraft).toBeNull();

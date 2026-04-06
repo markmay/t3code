@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { randomUUID } from "~/lib/utils";
 
 export type AnnotationSide = "deletions" | "additions";
 
@@ -28,12 +29,11 @@ export interface ReviewCommentsState {
   activeDraft: DraftCommentTarget | null;
   editingCommentId: string | null;
 
-  openDraft: (target: Omit<DraftCommentTarget, "prefillText" | "endLineNumber"> & { endLineNumber?: number | undefined }) => void;
+  openDraft: (target: Omit<DraftCommentTarget, "prefillText">) => void;
   closeDraft: () => void;
   submitComment: (text: string) => void;
   removeComment: (commentId: string) => void;
   startEditing: (commentId: string) => void;
-  cancelEditing: () => void;
   updateComment: (commentId: string, text: string) => void;
   clearAllComments: () => void;
 }
@@ -45,7 +45,6 @@ export const useReviewCommentsStore = create<ReviewCommentsState>((set, get) => 
 
   openDraft: (target) => {
     const { activeDraft } = get();
-    // Toggle: if draft is already open at the same location, close it
     if (
       activeDraft &&
       activeDraft.filePath === target.filePath &&
@@ -80,7 +79,7 @@ export const useReviewCommentsStore = create<ReviewCommentsState>((set, get) => 
     if (!activeDraft || trimmed.length === 0) return;
 
     const comment: ReviewComment = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       filePath: activeDraft.filePath,
       side: activeDraft.side,
       lineNumber: activeDraft.lineNumber,
@@ -116,10 +115,6 @@ export const useReviewCommentsStore = create<ReviewCommentsState>((set, get) => 
         prefillText: comment.text,
       },
     });
-  },
-
-  cancelEditing: () => {
-    set({ activeDraft: null, editingCommentId: null });
   },
 
   updateComment: (commentId, text) => {
