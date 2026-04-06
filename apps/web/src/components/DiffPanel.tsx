@@ -34,6 +34,9 @@ import { useSettings } from "../hooks/useSettings";
 import { formatShortTimestamp } from "../timestampFormat";
 import { DiffPanelLoadingState, DiffPanelShell, type DiffPanelMode } from "./DiffPanelShell";
 import { ToggleGroup, Toggle } from "./ui/toggle-group";
+import { useFileDiffAnnotations } from "./diff-review/useFileDiffAnnotations";
+import { DiffReviewCommentBadge } from "./diff-review/DiffReviewCommentBadge";
+import { DiffReviewSendButton } from "./diff-review/DiffReviewSendButton";
 
 type DiffRenderMode = "stacked" | "split";
 type DiffThemeType = "light" | "dark";
@@ -99,6 +102,30 @@ const DIFF_PANEL_UNSAFE_CSS = `
 [data-title]:hover {
   color: color-mix(in srgb, var(--foreground) 84%, var(--primary)) !important;
   text-decoration-color: currentColor;
+}
+
+`;
+
+/**
+ * Extra shadow-DOM CSS injected when a file has active review content
+ * (file-level comment input or bubbles). It collapses the [data-metadata]
+ * container with `display:contents` so its children — the +/- stats and the
+ * slotted metadata (our review content) — become direct flex items of
+ * [data-diffs-header]. Combined with flex-wrap on the header and
+ * display:contents on the slotted wrapper, the review content block
+ * (which has flex-basis:100% set inline) wraps to a new full-width row.
+ */
+const DIFF_PANEL_FILE_REVIEW_CSS = `
+[data-diffs-header] {
+  flex-wrap: wrap !important;
+}
+
+[data-metadata] {
+  display: contents !important;
+}
+
+::slotted([slot="header-metadata"]) {
+  display: contents !important;
 }
 `;
 
@@ -506,7 +533,9 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
           ))}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]">
+      <div className="flex shrink-0 items-center gap-2 [-webkit-app-region:no-drag]">
+        <DiffReviewCommentBadge />
+        <DiffReviewSendButton threadId={activeThreadId} cwd={activeCwd} />
         <ToggleGroup
           className="shrink-0"
           variant="outline"
@@ -592,33 +621,15 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
                   const fileKey = buildFileDiffRenderKey(fileDiff);
                   const themedFileKey = `${fileKey}:${resolvedTheme}`;
                   return (
-                    <div
+                    <ReviewableFileDiff
                       key={themedFileKey}
-                      data-diff-file-path={filePath}
-                      className="diff-render-file mb-2 rounded-md first:mt-2 last:mb-0"
-                      onClickCapture={(event) => {
-                        const nativeEvent = event.nativeEvent as MouseEvent;
-                        const composedPath = nativeEvent.composedPath?.() ?? [];
-                        const clickedHeader = composedPath.some((node) => {
-                          if (!(node instanceof Element)) return false;
-                          return node.hasAttribute("data-title");
-                        });
-                        if (!clickedHeader) return;
-                        openDiffFileInEditor(filePath);
-                      }}
-                    >
-                      <FileDiff
-                        fileDiff={fileDiff}
-                        options={{
-                          diffStyle: diffRenderMode === "split" ? "split" : "unified",
-                          lineDiffType: "none",
-                          overflow: diffWordWrap ? "wrap" : "scroll",
-                          theme: resolveDiffThemeName(resolvedTheme),
-                          themeType: resolvedTheme as DiffThemeType,
-                          unsafeCSS: DIFF_PANEL_UNSAFE_CSS,
-                        }}
-                      />
-                    </div>
+                      fileDiff={fileDiff}
+                      filePath={filePath}
+                      diffStyle={diffRenderMode === "split" ? "split" : "unified"}
+                      overflow={diffWordWrap ? "wrap" : "scroll"}
+                      resolvedTheme={resolvedTheme as DiffThemeType}
+                      onHeaderClick={openDiffFileInEditor}
+                    />
                   );
                 })}
               </Virtualizer>
@@ -643,5 +654,68 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
         </>
       )}
     </DiffPanelShell>
+  );
+}
+
+/** Wrapper around `<FileDiff>` that wires up review comment annotations and gutter utility. */
+function ReviewableFileDiff({
+  fileDiff,
+  filePath,
+  diffStyle,
+  overflow,
+  resolvedTheme,
+  onHeaderClick,
+}: {
+  fileDiff: FileDiffMetadata;
+  filePath: string;
+  diffStyle: "unified" | "split";
+  overflow?: "scroll" | "wrap";
+  resolvedTheme: "light" | "dark";
+  onHeaderClick: (filePath: string) => void;
+}) {
+  const {
+    lineAnnotations,
+    renderAnnotation,
+    renderHeaderMetadata,
+    hasFileReviewContent,
+    onGutterUtilityClick,
+  } = useFileDiffAnnotations(filePath);
+
+  const effectiveUnsafeCSS = hasFileReviewContent
+    ? DIFF_PANEL_UNSAFE_CSS + DIFF_PANEL_FILE_REVIEW_CSS
+    : DIFF_PANEL_UNSAFE_CSS;
+
+  return (
+    <div
+      data-diff-file-path={filePath}
+      className="diff-render-file mb-2 rounded-md first:mt-2 last:mb-0"
+      onClickCapture={(event) => {
+        const nativeEvent = event.nativeEvent as MouseEvent;
+        const composedPath = nativeEvent.composedPath?.() ?? [];
+        const clickedHeader = composedPath.some((node) => {
+          if (!(node instanceof Element)) return false;
+          return node.hasAttribute("data-title");
+        });
+        if (!clickedHeader) return;
+        onHeaderClick(filePath);
+      }}
+    >
+      <FileDiff
+        fileDiff={fileDiff}
+        lineAnnotations={lineAnnotations}
+        renderAnnotation={renderAnnotation}
+        renderHeaderMetadata={renderHeaderMetadata}
+        options={{
+          diffStyle,
+          lineDiffType: "none",
+          ...(overflow ? { overflow } : {}),
+          theme: resolveDiffThemeName(resolvedTheme),
+          themeType: resolvedTheme as DiffThemeType,
+          unsafeCSS: effectiveUnsafeCSS,
+          enableGutterUtility: true,
+          onGutterUtilityClick,
+        }}
+      />
+    </div>
   );
 }
